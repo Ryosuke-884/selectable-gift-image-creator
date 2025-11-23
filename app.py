@@ -718,13 +718,47 @@ else:
         
         st.markdown("---")
         st.markdown("#### 画像を微調整")
-        modification_prompt = st.text_input("変更したい点（例：文字色を青にして、もっと明るく）")
+        st.caption("生成された画像を元に、さらに調整を加えることができます")
+        modification_prompt = st.text_area(
+            "変更したい点を入力してください", 
+            placeholder="例: 文字色を青にして、背景をもっと明るく、文字サイズを大きく...",
+            height=120,
+            label_visibility="collapsed"
+        )
         
         if st.button("再生成する", type="secondary"):
             if not modification_prompt:
                 st.warning("変更内容を入力してください。")
             else:
-                image, error = generate_image(uploaded_files, main_text, sub_text, prompt_style, aspect_ratio, modification_prompt)
+                # Pass the generated image as reference for regeneration
+                # Create a temporary file-like object from the generated image
+                buf = io.BytesIO()
+                st.session_state.generated_image.save(buf, format="PNG")
+                buf.seek(0)
+                
+                # Create a mock UploadedFile-like object
+                class MockUploadedFile:
+                    def __init__(self, data, name="generated.png", type="image/png"):
+                        self._data = data
+                        self.name = name
+                        self.type = type
+                    
+                    def seek(self, pos):
+                        self._data.seek(pos)
+                    
+                    def getvalue(self):
+                        return self._data.getvalue()
+                    
+                    def read(self):
+                        return self._data.read()
+                
+                reference_image = MockUploadedFile(buf)
+                
+                # Combine original prompt with modification request
+                combined_prompt = f"{prompt_style}\n\n【変更指示】\n{modification_prompt}"
+                
+                # Generate with the previous image as reference
+                image, error = generate_image(uploaded_files, main_text, sub_text, combined_prompt, aspect_ratio, reference_image)
                 if error:
                     st.error(error)
                 else:
